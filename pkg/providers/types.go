@@ -16,10 +16,11 @@ type FunctionCall struct {
 }
 
 type LLMResponse struct {
-	Content      string     `json:"content"`
-	ToolCalls    []ToolCall `json:"tool_calls,omitempty"`
-	FinishReason string     `json:"finish_reason"`
-	Usage        *UsageInfo `json:"usage,omitempty"`
+	Content         string     `json:"content"`
+	ToolCalls       []ToolCall `json:"tool_calls,omitempty"`
+	FinishReason    string     `json:"finish_reason"`
+	Usage           *UsageInfo `json:"usage,omitempty"`
+	ThinkingContent string     `json:"thinking_content,omitempty"` // For Claude extended thinking
 }
 
 type UsageInfo struct {
@@ -29,10 +30,11 @@ type UsageInfo struct {
 }
 
 type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+	Role            string     `json:"role"`
+	Content         string     `json:"content"`
+	ToolCalls       []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID      string     `json:"tool_call_id,omitempty"`
+	ThinkingContent string     `json:"thinking_content,omitempty"` // For Claude extended thinking
 }
 
 type LLMProvider interface {

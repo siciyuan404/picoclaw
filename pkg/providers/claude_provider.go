@@ -77,6 +77,14 @@ func buildClaudeParams(messages []Message, tools []ToolDefinition, model string,
 		case "assistant":
 			if len(msg.ToolCalls) > 0 {
 				var blocks []anthropic.ContentBlockParamUnion
+				// Add thinking block if present (required for extended thinking mode)
+				if msg.ThinkingContent != "" {
+					blocks = append(blocks, anthropic.ContentBlockParamUnion{
+						OfThinking: &anthropic.ThinkingBlockParam{
+							Thinking: msg.ThinkingContent,
+						},
+					})
+				}
 				if msg.Content != "" {
 					blocks = append(blocks, anthropic.NewTextBlock(msg.Content))
 				}
@@ -85,9 +93,16 @@ func buildClaudeParams(messages []Message, tools []ToolDefinition, model string,
 				}
 				anthropicMessages = append(anthropicMessages, anthropic.NewAssistantMessage(blocks...))
 			} else {
-				anthropicMessages = append(anthropicMessages,
-					anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)),
-				)
+				var blocks []anthropic.ContentBlockParamUnion
+				if msg.ThinkingContent != "" {
+					blocks = append(blocks, anthropic.ContentBlockParamUnion{
+						OfThinking: &anthropic.ThinkingBlockParam{
+							Thinking: msg.ThinkingContent,
+						},
+					})
+				}
+				blocks = append(blocks, anthropic.NewTextBlock(msg.Content))
+				anthropicMessages = append(anthropicMessages, anthropic.NewAssistantMessage(blocks...))
 			}
 		case "tool":
 			anthropicMessages = append(anthropicMessages,
@@ -150,10 +165,14 @@ func translateToolsForClaude(tools []ToolDefinition) []anthropic.ToolUnionParam 
 
 func parseClaudeResponse(resp *anthropic.Message) *LLMResponse {
 	var content string
+	var thinkingContent string
 	var toolCalls []ToolCall
 
 	for _, block := range resp.Content {
 		switch block.Type {
+		case "thinking":
+			tb := block.AsThinking()
+			thinkingContent += tb.Thinking
 		case "text":
 			tb := block.AsText()
 			content += tb.Text
@@ -182,9 +201,10 @@ func parseClaudeResponse(resp *anthropic.Message) *LLMResponse {
 	}
 
 	return &LLMResponse{
-		Content:      content,
-		ToolCalls:    toolCalls,
-		FinishReason: finishReason,
+		Content:         content,
+		ThinkingContent: thinkingContent,
+		ToolCalls:       toolCalls,
+		FinishReason:    finishReason,
 		Usage: &UsageInfo{
 			PromptTokens:     int(resp.Usage.InputTokens),
 			CompletionTokens: int(resp.Usage.OutputTokens),

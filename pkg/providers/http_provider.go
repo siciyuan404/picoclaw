@@ -60,9 +60,41 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 		}
 	}
 
+	// Convert messages to API format, including reasoning_content for thinking models
+	apiMessages := make([]map[string]interface{}, 0, len(messages))
+	for _, msg := range messages {
+		apiMsg := map[string]interface{}{
+			"role":    msg.Role,
+			"content": msg.Content,
+		}
+		// Include reasoning_content for assistant messages with thinking content
+		if msg.Role == "assistant" && msg.ThinkingContent != "" {
+			apiMsg["reasoning_content"] = msg.ThinkingContent
+		}
+		if len(msg.ToolCalls) > 0 {
+			toolCalls := make([]map[string]interface{}, 0, len(msg.ToolCalls))
+			for _, tc := range msg.ToolCalls {
+				argsJSON, _ := json.Marshal(tc.Arguments)
+				toolCalls = append(toolCalls, map[string]interface{}{
+					"id":   tc.ID,
+					"type": "function",
+					"function": map[string]interface{}{
+						"name":      tc.Name,
+						"arguments": string(argsJSON),
+					},
+				})
+			}
+			apiMsg["tool_calls"] = toolCalls
+		}
+		if msg.ToolCallID != "" {
+			apiMsg["tool_call_id"] = msg.ToolCallID
+		}
+		apiMessages = append(apiMessages, apiMsg)
+	}
+
 	requestBody := map[string]interface{}{
 		"model":    model,
-		"messages": messages,
+		"messages": apiMessages,
 	}
 
 	if len(tools) > 0 {
@@ -126,8 +158,9 @@ func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
 	var apiResponse struct {
 		Choices []struct {
 			Message struct {
-				Content   string `json:"content"`
-				ToolCalls []struct {
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content"`
+				ToolCalls        []struct {
 					ID       string `json:"id"`
 					Type     string `json:"type"`
 					Function *struct {
@@ -185,10 +218,11 @@ func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
 	}
 
 	return &LLMResponse{
-		Content:      choice.Message.Content,
-		ToolCalls:    toolCalls,
-		FinishReason: choice.FinishReason,
-		Usage:        apiResponse.Usage,
+		Content:         choice.Message.Content,
+		ThinkingContent: choice.Message.ReasoningContent,
+		ToolCalls:       toolCalls,
+		FinishReason:    choice.FinishReason,
+		Usage:           apiResponse.Usage,
 	}, nil
 }
 
